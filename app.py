@@ -2,104 +2,81 @@ import streamlit as st
 import joblib
 import numpy as np
 import pandas as pd
-import plotly.express as px
+import json
+import os
+from fpdf import FPDF
 
 # -----------------------------
-# PAGE CONFIG
+# PAGE CONFIG (PROFESSIONAL UI)
 # -----------------------------
 st.set_page_config(
     page_title="AI Disease Predictor",
     page_icon="🏥",
-    layout="wide"
+    layout="centered"
 )
 
-# -----------------------------
-# CUSTOM UI STYLE
-# -----------------------------
 st.markdown("""
 <style>
 .main {
-    background-color: #f5f7ff;
+    background-color: #f4f7ff;
 }
-
-.title {
-    font-size: 42px;
-    font-weight: bold;
-    text-align: center;
+.stButton>button {
+    background-color: #4f46e5;
+    color: white;
+    border-radius: 10px;
+    height: 45px;
+    width: 100%;
+}
+h1 {
     color: #4f46e5;
-}
-
-.subtitle {
     text-align: center;
-    color: #6b7280;
-    margin-bottom: 20px;
-}
-
-.card {
-    background: white;
-    padding: 20px;
-    border-radius: 15px;
-    box-shadow: 0px 4px 20px rgba(0,0,0,0.08);
 }
 </style>
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# HEADER
+# LOAD MODEL (SAFE LOADING)
 # -----------------------------
-st.markdown("<div class='title'>🏥 AI Disease Prediction System</div>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Smart AI-powered symptom checker with medical insights</div>", unsafe_allow_html=True)
-
-st.markdown("---")
-
-# -----------------------------
-# LOAD MODEL (SAFE)
-# -----------------------------
-try:
+@st.cache_resource
+def load_model():
     model = joblib.load("model/model.pkl")
     features = joblib.load("model/features.pkl")
-except:
-    st.error("❌ Model files missing or corrupted. Please re-upload model.pkl and features.pkl")
-    st.stop()
+    return model, features
+
+model, features = load_model()
 
 # -----------------------------
-# LAYOUT
+# TITLE
 # -----------------------------
-col1, col2 = st.columns([2, 1])
+st.title("🏥 AI Disease Prediction System")
+st.write("Select symptoms below and get AI-powered prediction")
 
 # -----------------------------
-# SYMPTOMS SECTION
+# SYMPTOMS INPUT
 # -----------------------------
-with col1:
-    st.markdown("## 🧠 Select Your Symptoms")
+st.subheader("Select Symptoms")
 
-    selected_symptoms = []
+selected_features = []
 
-    for feature in features:
+cols = st.columns(2)
+
+for i, feature in enumerate(features):
+    with cols[i % 2]:
         if st.checkbox(feature.replace("_", " ")):
-            selected_symptoms.append(feature)
-
-    predict = st.button("🔍 Predict Disease")
-
-# -----------------------------
-# INFO PANEL
-# -----------------------------
-with col2:
-    st.markdown("## 📊 Info Panel")
-    st.info("Select symptoms on the left and click Predict to get AI diagnosis")
+            selected_features.append(1)
+        else:
+            selected_features.append(0)
 
 # -----------------------------
-# PREDICTION
+# PREDICTION BUTTON
 # -----------------------------
-if predict:
+if st.button("🔍 Predict Disease"):
 
-    if len(selected_symptoms) == 0:
-        st.warning("⚠ Please select at least one symptom")
-
+    if sum(selected_features) == 0:
+        st.error("Please select at least one symptom")
     else:
 
-        input_data = [1 if f in selected_symptoms else 0 for f in features]
-        input_df = pd.DataFrame([input_data], columns=features)
+        input_df = pd.DataFrame([selected_features], columns=features)
 
         prediction = model.predict(input_df)[0]
         probabilities = model.predict_proba(input_df)[0]
@@ -107,85 +84,51 @@ if predict:
         top_idx = np.argsort(probabilities)[-5:][::-1]
         diseases = model.classes_
 
-        results = pd.DataFrame({
-            "Disease": [diseases[i] for i in top_idx],
-            "Probability": [probabilities[i]*100 for i in top_idx]
-        })
+        results = [(diseases[i], round(probabilities[i] * 100, 2)) for i in top_idx]
 
         # -----------------------------
-        # RESULT HEADER
+        # OUTPUT
         # -----------------------------
-        st.markdown("---")
-        st.markdown("## 🧬 Diagnosis Result")
+        st.success(f"Predicted Disease: {prediction}")
 
-        st.success(f"🧠 Predicted Disease: {prediction}")
+        st.subheader("🧠 Top Predictions")
+
+        df = pd.DataFrame(results, columns=["Disease", "Probability %"])
+        st.bar_chart(df.set_index("Disease"))
 
         # -----------------------------
-        # CHART (PROFESSIONAL)
+        # DOCTOR
         # -----------------------------
-        fig = px.bar(
-            results,
-            x="Disease",
-            y="Probability",
-            text_auto=".2f",
-            color="Probability",
-            title="Top 5 Disease Probabilities"
-        )
+        def recommend(name):
+            name = str(name).lower()
+            if "skin" in name:
+                return "Dermatologist"
+            elif "heart" in name:
+                return "Cardiologist"
+            elif "brain" in name:
+                return "Neurologist"
+            else:
+                return "General Physician"
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.info(f"👨‍⚕️ Recommended Doctor: {recommend(prediction)}")
 
         # -----------------------------
         # DESCRIPTION
         # -----------------------------
-        st.markdown("## 🧠 Medical Description")
-
-        try:
-            import wikipedia
-            desc = wikipedia.summary(str(prediction) + " disease", sentences=2)
-        except:
-            desc = "No detailed medical description available for this prediction."
-
-        st.write(desc)
+        st.subheader("📖 Description")
+        st.write(f"{prediction} is detected by AI analysis of symptoms.")
 
         # -----------------------------
-        # DOCTOR RECOMMENDATION
+        # PDF DOWNLOAD
         # -----------------------------
-        if "heart" in str(prediction).lower():
-            doctor = "❤️ Cardiologist"
-        elif "skin" in str(prediction).lower():
-            doctor = "🧴 Dermatologist"
-        elif "brain" in str(prediction).lower():
-            doctor = "🧠 Neurologist"
-        else:
-            doctor = "👨‍⚕️ General Physician"
-
-        st.markdown("## 🏥 Recommended Doctor")
-        st.success(doctor)
-
-        # -----------------------------
-        # DOWNLOAD REPORT
-        # -----------------------------
-        from fpdf import FPDF
-
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
-
-        pdf.cell(200, 10, "AI Disease Prediction Report", ln=True)
+        pdf.cell(200, 10, "AI Disease Report", ln=True)
         pdf.cell(200, 10, f"Disease: {prediction}", ln=True)
-        pdf.cell(200, 10, f"Doctor: {doctor}", ln=True)
 
-        pdf.output("report.pdf")
+        file_path = "report.pdf"
+        pdf.output(file_path)
 
-        with open("report.pdf", "rb") as f:
-            st.download_button(
-                "📄 Download Medical Report",
-                f,
-                file_name="AI_Disease_Report.pdf"
-            )
-
-# -----------------------------
-# FOOTER
-# -----------------------------
-st.markdown("---")
-st.caption("⚡ Built with Streamlit | AI Healthcare System | Machine Learning Powered")
+        with open(file_path, "rb") as f:
+            st.download_button("📄 Download Report", f, file_name="report.pdf")
