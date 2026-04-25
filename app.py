@@ -2,65 +2,53 @@ from flask import Flask, render_template, request, redirect, session, send_file
 import joblib
 import numpy as np
 import pandas as pd
+import os
+import json
 from fpdf import FPDF
-import wikipedia
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-# Load model
-model = joblib.load('model/model.pkl')
-features = joblib.load('model/features.pkl')
+# -----------------------------
+# LOAD MODEL
+# -----------------------------
+model = joblib.load("model/model.pkl")
+features = joblib.load("model/features.pkl")
 
 # -----------------------------
-# HOME PAGE
+# HOME
 # -----------------------------
 @app.route('/')
 def home():
-    return render_template('index.html', features=features)
+    return render_template("index.html", features=features)
 
 # -----------------------------
-# WIKIPEDIA DESCRIPTION FIXED
+# DESCRIPTION
 # -----------------------------
 def get_medical_description(name):
     try:
-        query = name + " disease"
-        summary = wikipedia.summary(query, sentences=3, auto_suggest=True)
-
-        if any(x in summary.lower() for x in ["law", "court", "music"]):
-            raise Exception("Wrong context")
-
-        return summary
-
+        import wikipedia
+        return wikipedia.summary(str(name) + " disease", sentences=2)
     except:
-        try:
-            results = wikipedia.search(name + " disease")
-            if results:
-                return wikipedia.summary(results[0], sentences=3)
-        except:
-            pass
-
-    return f"{name} is a medical condition detected by AI."
+        return f"{name} is detected by AI system."
 
 # -----------------------------
 # DOCTOR RECOMMENDATION
 # -----------------------------
 def recommend_doctor(name):
-    name = name.lower()
+    name = str(name).lower()
 
-    if "skin" in name or "fungal" in name:
+    if "skin" in name:
         return "Dermatologist"
-    elif "fever" in name or "flu" in name:
-        return "General Physician"
     elif "heart" in name:
         return "Cardiologist"
-    elif "brain" in name or "migraine" in name:
+    elif "brain" in name:
         return "Neurologist"
     else:
         return "General Physician"
 
 # -----------------------------
-# PREDICT ROUTE (FIXED EMPTY INPUT)
+# PREDICT
 # -----------------------------
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -71,15 +59,14 @@ def predict():
     for feature in features:
         value = request.form.get(feature)
 
-        if value == 'on':
+        if value == "on":
             input_data.append(1)
             selected = True
         else:
             input_data.append(0)
 
-    # 🚨 BLOCK EMPTY INPUT
     if not selected:
-        return "<h2 style='color:red;text-align:center;'>⚠ Please select at least one symptom!</h2>"
+        return "<h2 style='color:red;text-align:center;'>Select at least one symptom</h2>"
 
     input_df = pd.DataFrame([input_data], columns=features)
 
@@ -91,19 +78,19 @@ def predict():
 
     results = [(diseases[i], round(probabilities[i]*100, 2)) for i in top_idx]
 
-    session['prediction'] = prediction
+    session['prediction'] = str(prediction)
     session['results'] = results
 
-    return redirect('/result')
+    return redirect("/result")
 
 # -----------------------------
-# RESULT PAGE
+# RESULT
 # -----------------------------
 @app.route('/result')
 def result():
 
-    prediction = session.get('prediction')
-    results = session.get('results')
+    prediction = session.get('prediction', "Unknown")
+    results = session.get('results', [])
 
     description = get_medical_description(prediction)
     doctor = recommend_doctor(prediction)
@@ -113,7 +100,8 @@ def result():
         prediction=prediction,
         results=results,
         description=description,
-        doctor=doctor
+        doctor=doctor,
+        chart_data=json.dumps(results)
     )
 
 # -----------------------------
@@ -122,20 +110,29 @@ def result():
 @app.route('/download')
 def download():
 
+    prediction = session.get('prediction', "Unknown")
+
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
 
     pdf.cell(200, 10, "AI Disease Prediction Report", ln=True)
-    pdf.cell(200, 10, f"Disease: {session.get('prediction')}", ln=True)
-    pdf.cell(200, 10, f"Doctor: {recommend_doctor(session.get('prediction'))}", ln=True)
+    pdf.cell(200, 10, f"Disease: {prediction}", ln=True)
+    pdf.cell(200, 10, f"Doctor: {recommend_doctor(prediction)}", ln=True)
 
-    pdf.output("report.pdf")
+    file_path = "report.pdf"
+    pdf.output(file_path)
 
-    return send_file("report.pdf", as_attachment=True)
+    return send_file(file_path, as_attachment=True)
 
 # -----------------------------
-# RUN APP
+# RUN (IMPORTANT FIX)
 # -----------------------------
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False,
+        use_reloader=False
+    )
