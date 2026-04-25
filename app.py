@@ -3,7 +3,6 @@ import joblib
 import numpy as np
 import pandas as pd
 import plotly.express as px
-from fpdf import FPDF
 
 # -----------------------------
 # PAGE CONFIG
@@ -15,44 +14,53 @@ st.set_page_config(
 )
 
 # -----------------------------
-# LOAD MODEL
-# -----------------------------
-model = joblib.load("model/model.pkl")
-features = joblib.load("model/features.pkl")
-
-# -----------------------------
 # CUSTOM UI STYLE
 # -----------------------------
 st.markdown("""
-    <style>
-        .main {
-            background-color: #f4f7ff;
-        }
-        .title {
-            font-size: 42px;
-            font-weight: bold;
-            text-align: center;
-            color: #4f46e5;
-        }
-        .subtitle {
-            text-align: center;
-            color: #6b7280;
-            margin-bottom: 30px;
-        }
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0px 4px 20px rgba(0,0,0,0.1);
-        }
-    </style>
+<style>
+.main {
+    background-color: #f5f7ff;
+}
+
+.title {
+    font-size: 42px;
+    font-weight: bold;
+    text-align: center;
+    color: #4f46e5;
+}
+
+.subtitle {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 20px;
+}
+
+.card {
+    background: white;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0px 4px 20px rgba(0,0,0,0.08);
+}
+</style>
 """, unsafe_allow_html=True)
 
 # -----------------------------
 # HEADER
 # -----------------------------
 st.markdown("<div class='title'>🏥 AI Disease Prediction System</div>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Smart AI-powered health assistant for symptom analysis</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Smart AI-powered symptom checker with medical insights</div>", unsafe_allow_html=True)
+
+st.markdown("---")
+
+# -----------------------------
+# LOAD MODEL (SAFE)
+# -----------------------------
+try:
+    model = joblib.load("model/model.pkl")
+    features = joblib.load("model/features.pkl")
+except:
+    st.error("❌ Model files missing or corrupted. Please re-upload model.pkl and features.pkl")
+    st.stop()
 
 # -----------------------------
 # LAYOUT
@@ -63,31 +71,30 @@ col1, col2 = st.columns([2, 1])
 # SYMPTOMS SECTION
 # -----------------------------
 with col1:
-    st.markdown("### 🧠 Select Your Symptoms")
+    st.markdown("## 🧠 Select Your Symptoms")
 
     selected_symptoms = []
 
-    with st.container():
-        for feature in features:
-            if st.checkbox(feature.replace("_", " ")):
-                selected_symptoms.append(feature)
+    for feature in features:
+        if st.checkbox(feature.replace("_", " ")):
+            selected_symptoms.append(feature)
 
-    predict_btn = st.button("🔍 Predict Disease")
+    predict = st.button("🔍 Predict Disease")
 
 # -----------------------------
-# RESULTS PANEL
+# INFO PANEL
 # -----------------------------
 with col2:
-    st.markdown("### 📊 Info Panel")
-    st.info("Select symptoms and click Predict to see AI diagnosis")
+    st.markdown("## 📊 Info Panel")
+    st.info("Select symptoms on the left and click Predict to get AI diagnosis")
 
 # -----------------------------
-# PREDICTION LOGIC
+# PREDICTION
 # -----------------------------
-if predict_btn:
+if predict:
 
     if len(selected_symptoms) == 0:
-        st.error("⚠ Please select at least one symptom")
+        st.warning("⚠ Please select at least one symptom")
 
     else:
 
@@ -97,8 +104,8 @@ if predict_btn:
         prediction = model.predict(input_df)[0]
         probabilities = model.predict_proba(input_df)[0]
 
-        diseases = model.classes_
         top_idx = np.argsort(probabilities)[-5:][::-1]
+        diseases = model.classes_
 
         results = pd.DataFrame({
             "Disease": [diseases[i] for i in top_idx],
@@ -106,7 +113,7 @@ if predict_btn:
         })
 
         # -----------------------------
-        # MAIN RESULT CARD
+        # RESULT HEADER
         # -----------------------------
         st.markdown("---")
         st.markdown("## 🧬 Diagnosis Result")
@@ -120,42 +127,46 @@ if predict_btn:
             results,
             x="Disease",
             y="Probability",
-            color="Probability",
             text_auto=".2f",
+            color="Probability",
             title="Top 5 Disease Probabilities"
         )
+
         st.plotly_chart(fig, use_container_width=True)
 
         # -----------------------------
         # DESCRIPTION
         # -----------------------------
+        st.markdown("## 🧠 Medical Description")
+
         try:
             import wikipedia
             desc = wikipedia.summary(str(prediction) + " disease", sentences=2)
         except:
-            desc = "No detailed medical description available."
+            desc = "No detailed medical description available for this prediction."
 
-        st.markdown("### 🧠 Medical Description")
         st.write(desc)
 
         # -----------------------------
         # DOCTOR RECOMMENDATION
         # -----------------------------
-        if "skin" in str(prediction).lower():
-            doctor = "👨‍⚕️ Dermatologist"
-        elif "heart" in str(prediction).lower():
+        if "heart" in str(prediction).lower():
             doctor = "❤️ Cardiologist"
+        elif "skin" in str(prediction).lower():
+            doctor = "🧴 Dermatologist"
         elif "brain" in str(prediction).lower():
             doctor = "🧠 Neurologist"
         else:
             doctor = "👨‍⚕️ General Physician"
 
-        st.markdown("### 🏥 Recommended Doctor")
+        st.markdown("## 🏥 Recommended Doctor")
         st.success(doctor)
 
         # -----------------------------
-        # PDF REPORT
+        # DOWNLOAD REPORT
         # -----------------------------
+        from fpdf import FPDF
+
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
@@ -168,7 +179,7 @@ if predict_btn:
 
         with open("report.pdf", "rb") as f:
             st.download_button(
-                "📄 Download Full Report",
+                "📄 Download Medical Report",
                 f,
                 file_name="AI_Disease_Report.pdf"
             )
@@ -177,4 +188,4 @@ if predict_btn:
 # FOOTER
 # -----------------------------
 st.markdown("---")
-st.caption("⚡ Built with Streamlit + Machine Learning | Designed for AI Healthcare System")
+st.caption("⚡ Built with Streamlit | AI Healthcare System | Machine Learning Powered")
