@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Result</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<div class="navbar">
+    🏥 AI Disease Prediction Result
+</div>
+
+<div class="container">
+
+    <div class="card">
+
+        <h2 class="result-title">{{ prediction }}</h2>
+
+        <div class="grid">
+
+            <div class="box">
+                <h3>🧠 Description</h3>
+                <p>{{ description }}</p>
+            </div>
+
+            <div class="box">
+                <h3>👨‍⚕️ Recommended Doctor</h3>
+                <p>{{ doctor }}</p>
+            </div>
+
+        </div>
+
+        <h3>📊 Probability Chart</h3>
+        <canvas id="chart"></canvas>
+
+        <a href="/download">
+            <button class="btn">📄 Download Report</button>
+        </a>
+
+    </div>
+
+</div>
+
+<script>
+var ctx = document.getElementById('chart');
+
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: [{% for d,p in results %}"{{ d }}",{% endfor %}],
+        datasets: [{
+            label: 'Probability %',
+            data: [{% for d,p in results %}{{ p }},{% endfor %}],
+            backgroundColor: '#4f46e5',
+            borderRadius: 8
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false }
+        }
+    }
+});
+</script>
+
+</body>
+</html>

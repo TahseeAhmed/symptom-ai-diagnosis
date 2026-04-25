@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Disease AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<div class="navbar">
+    🏥 AI Disease Prediction System
+</div>
+
+<div class="container">
+
+    <div class="card">
+
+        <h1>Check Your Symptoms</h1>
+        <p class="subtext">Select symptoms and get AI-based prediction instantly</p>
+
+        <form method="post" action="/predict">
+
+            <div class="symptom-box">
+                {% for feature in features %}
+                <label class="symptom">
+                    <input type="checkbox" name="{{ feature }}">
+                    <span>{{ feature.replace('_',' ') }}</span>
+                </label>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="btn">🔍 Predict Disease</button>
+
+        </form>
+
+    </div>
+
+</div>
+
+</body>
+</html>
